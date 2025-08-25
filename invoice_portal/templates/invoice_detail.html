@@ -1,0 +1,77 @@
+<div class="header-row">
+  <h1>Invoice {{ invoice['number'] }}</h1>
+  <div class="actions">
+    <button class="btn" onclick="openPdf({{ invoice['id'] }})">Download</button>
+    {% if totals.due > 0 and invoice['status'] in ['open','overdue'] %}
+    <button class="btn primary" data-pay="{{ invoice['id'] }}">Pay {{ invoice['currency'] }} {{ '%.2f'|format(totals.due) }}</button>
+    {% endif %}
+  </div>
+</div>
+<div class="split">
+  <div>
+    <div class="card">
+      <h3>Bill To</h3>
+      <div id="billing-info" hx-post="/invoice/{{ invoice['id'] }}/billing" hx-trigger="load"></div>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <h3>Summary</h3>
+      <ul class="summary">
+        <li><span>Subtotal</span><strong>{{ invoice['currency'] }} {{ '%.2f'|format(totals.subtotal) }}</strong></li>
+        <li><span>Tax ({{ '%.0f'|format(invoice['tax_rate']*100) }}%)</span><strong>{{ invoice['currency'] }} {{ '%.2f'|format(totals.tax) }}</strong></li>
+        <li><span>Total</span><strong>{{ invoice['currency'] }} {{ '%.2f'|format(totals.total) }}</strong></li>
+        <li><span>Paid</span><strong>{{ invoice['currency'] }} {{ '%.2f'|format(totals.paid) }}</strong></li>
+        <li><span>Due</span><strong>{{ invoice['currency'] }} {{ '%.2f'|format(totals.due) }}</strong></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Description</th>
+        <th class="right">Qty</th>
+        <th class="right">Unit Price</th>
+        <th class="right">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item['description'] }}</td>
+        <td class="right">{{ '%.2f'|format(item['quantity']) }}</td>
+        <td class="right">{{ invoice['currency'] }} {{ '%.2f'|format(item['unit_price']) }}</td>
+        <td class="right">{{ invoice['currency'] }} {{ '%.2f'|format(item['quantity'] * item['unit_price']) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">{{ invoice['notes'] }}</p>
+</div>
+
+<script>
+  // Client-side payment stub: update dataset locally and refresh
+  document.querySelectorAll('[data-pay]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.getAttribute('data-pay'));
+      const data = getClientData();
+      const inv = data.invoices.find(i => i.id === id);
+      if (!inv) return;
+      const items = data.items.filter(it => it.invoice_id === id);
+      const subtotal = items.reduce((s,i)=>s+i.quantity*i.unit_price,0);
+      const tax = +(subtotal * (inv.tax_rate||0)).toFixed(2);
+      const total = +(subtotal + tax).toFixed(2);
+      const paid = data.payments.filter(p => p.invoice_id === id).reduce((s,p)=>s+p.amount,0);
+      const due = +(total - paid).toFixed(2);
+      if (due <= 0) return;
+      data.payments.push({invoice_id:id, amount: due, currency: inv.currency||'USD', method:'local', reference:'local-'+Date.now()});
+      inv.status = 'paid';
+      setClientData(data);
+      // Refresh current view
+      htmx.ajax('POST', '/invoice/'+id, {target: '#shell-main'});
+    });
+  });
+</script>

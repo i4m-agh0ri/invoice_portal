@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Help • Invoice Portal{% endblock %}
+{% block content %}
+  <h1>YAML Guide</h1>
+  <p class="muted">This portal reads your invoice data from YAML stored in your browser. Use this guide to author valid data, or start with the sample.</p>
+
+  <div class="card">
+    <h2>Schema</h2>
+    <p class="muted">Top-level keys: <code>client</code>, <code>invoices</code>, <code>items</code>, <code>payments</code>.</p>
+    <pre><code>client:
+  name: Your Company
+  email: you@example.com
+  address_line1: 123 Street
+  address_line2:
+  city: City
+  state: ST
+  postal_code: 12345
+  country: US
+  tax_id: US-123456789
+invoices:
+  - id: 1                 # required, unique
+    number: INV-1001      # required
+    currency: USD         # optional (defaults client-side to USD where omitted)
+    issue_date: 2025-01-10
+    due_date: 2025-02-10
+    status: open          # open|paid|overdue
+    tax_rate: 0.07        # decimal (e.g., 7% = 0.07)
+    notes: Optional note shown on invoice
+items:
+  - invoice_id: 1         # must reference an invoice id
+    description: Design
+    quantity: 10          # number
+    unit_price: 80        # number
+payments:
+  - invoice_id: 1         # must reference an invoice id
+    amount: 856.0         # number
+    currency: USD
+    method: local
+    reference: paid-1
+    </code></pre>
+  </div>
+
+  <div class="card">
+    <h2>Sample Data</h2>
+    <p>
+      Download or load the sample YAML:
+      <a class="btn" href="{{ url_for('static', filename='samples/invoices.yaml') }}" download>Download Sample</a>
+      <button class="btn" id="btn-load-sample-here">Load Sample Into Browser</button>
+    </p>
+    <p class="muted">Loading will overwrite your current local data. You can always export first from the Home page.</p>
+  </div>
+
+  <script>
+    document.getElementById('btn-load-sample-here').addEventListener('click', async function(){
+      try {
+        const res = await fetch('{{ url_for('static', filename='samples/invoices.yaml') }}', {cache:'no-store'});
+        const y = await res.text();
+        setClientDataYAML(y);
+        alert('Sample data loaded into LocalStorage. Go to Invoices to view it.');
+      } catch (e) {
+        alert('Failed to load sample YAML');
+      }
+    });
+  </script>
+{% endblock %}
+

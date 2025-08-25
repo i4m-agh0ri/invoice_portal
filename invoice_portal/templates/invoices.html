@@ -1,0 +1,25 @@
+<h1>Invoices</h1>
+<span id="filter-state" data-filter-active="{{ active }}" hidden></span>
+<div class="filters">
+  <a href="#" hx-post="/invoices" hx-vals='{"status":"all"}' hx-target="#shell-main" {% if active=='all' %}class="active"{% endif %}>All</a>
+  <a href="#" hx-post="/invoices" hx-vals='{"status":"open"}' hx-target="#shell-main" {% if active=='open' %}class="active"{% endif %}>Open</a>
+  <a href="#" hx-post="/invoices" hx-vals='{"status":"paid"}' hx-target="#shell-main" {% if active=='paid' %}class="active"{% endif %}>Paid</a>
+  <a href="#" hx-post="/invoices" hx-vals='{"status":"overdue"}' hx-target="#shell-main" {% if active=='overdue' %}class="active"{% endif %}>Overdue</a>
+  </div>
+<table class="table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Issue Date</th>
+      <th>Due Date</th>
+      <th>Status</th>
+      <th>Total</th>
+      <th>Paid</th>
+      <th>Due</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="invoice-rows">
+    {% include '_invoice_rows.html' %}
+  </tbody>
+</table>

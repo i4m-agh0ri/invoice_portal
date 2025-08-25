@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: invoice-portal
+  labels:
+    app: invoice-portal
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: invoice-portal
+  template:
+    metadata:
+      labels:
+        app: invoice-portal
+    spec:
+      containers:
+        - name: web
+          image: invoice-portal:latest # replace with your registry image
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: invoice-portal
+  labels:
+    app: invoice-portal
+spec:
+  selector:
+    app: invoice-portal
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+      name: http
+# Optional Ingress example (uncomment and adjust for your cluster)
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: invoice-portal
+#   annotations:
+#     nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+# spec:
+#   rules:
+#     - host: invoices.example.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: invoice-portal
+#                 port:
+#                   number: 80
+#   tls:
+#     - hosts: ["invoices.example.com"]
+#       secretName: invoices-tls
+
