@@ -1,12 +1,22 @@
-name: ci-cd
+name: ci-test-perf-security
 
 on:
   push:
     branches: [ "main" ]
+  pull_request:
   workflow_dispatch:
+
+# Cancel older runs for the same ref when new commits arrive
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   IMAGE_NAME: ghcr.io/i4m-agh0ri/invoice_portal
+  # Optional toggles via repo Settings → Variables → Actions
+  ENABLE_PIP_AUDIT: 'true'   # set 'false' to skip Python dep audit
+  ENABLE_BANDIT: 'true'     # set 'true' to run Bandit if Python project
+  ENABLE_TRIVY: 'true'       # image vulnerability scan (recommended)
 
 jobs:
   test:
@@ -14,32 +24,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Example: Python tests. Adjust to your stack or remove if N/A.
+      # --- Example Python toolchain; safe to keep even if not Python ---
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
 
-      - name: Install deps
+      - name: Install Python deps (if present)
         run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install -q pytest || true
 
-      - name: Unit & integration tests
+      - name: Run unit/integration tests
         run: |
-          if command -v pytest >/dev/null 2>&1 && [ -d tests ]; then pytest -q; else echo "No pytest/tests, skipping"; fi
+          if command -v pytest >/dev/null 2>&1 && [ -d tests ]; then
+            pytest -q
+          else
+            echo "No pytest or tests/ directory found — skipping tests"
+          fi
 
   perf:
     runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Compute tags
         id: meta
@@ -50,7 +58,7 @@ jobs:
             type=raw,value=latest
             type=sha,format=short
 
-      - name: Build image (for perf test)
+      - name: Build image (local only, no push)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -63,7 +71,7 @@ jobs:
             -p 8080:8080 \
             --name perf-under-test \
             ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          # allow brief startup time
+          # brief startup delay
           sleep 8
 
       - name: Install k6
@@ -78,25 +86,52 @@ jobs:
         env:
           TARGET: http://localhost:8080/
         run: |
-          if [ -f perf/test.js ]; then k6 run perf/test.js; else echo "No perf/test.js, skipping"; fi
+          if [ -f perf/test.js ]; then
+            k6 run perf/test.js
+          else
+            echo "No perf/test.js — skipping performance test"
+          fi
 
       - name: Stop container
         if: always()
         run: docker rm -f perf-under-test || true
 
-  build_push:
+  security:
     runs-on: ubuntu-latest
     needs: perf
     steps:
       - uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      # ---------- Python dependency audit (pip-audit) ----------
+      - name: Setup Python
+        if: ${{ env.ENABLE_PIP_AUDIT == 'true' || vars.ENABLE_PIP_AUDIT == 'true' }}
+        uses: actions/setup-python@v5
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          python-version: "3.12"
+          cache: "pip"
 
+      - name: pip-audit (SBOM+vuln for Python deps)
+        if: ${{ env.ENABLE_PIP_AUDIT == 'true' || vars.ENABLE_PIP_AUDIT == 'true' }}
+        run: |
+          pip install -q pip-audit || true
+          if [ -f requirements.txt ]; then
+            pip-audit -r requirements.txt
+          else
+            echo "No requirements.txt — skipping pip-audit"
+          fi
+
+      # ---------- Optional Bandit (Python SAST) ----------
+      - name: Bandit (static analysis)
+        if: ${{ env.ENABLE_BANDIT == 'true' || vars.ENABLE_BANDIT == 'true' }}
+        run: |
+          pip install -q bandit || true
+          if [ -d src ] || [ -d app ] || [ -f setup.py ] || [ -f pyproject.toml ]; then
+            bandit -r . -x tests || true
+          else
+            echo "No Python source detected — skipping Bandit"
+          fi
+
+      # ---------- Build image for vulnerability scanning ----------
       - name: Compute tags
         id: meta
         uses: docker/metadata-action@v5
@@ -106,25 +141,16 @@ jobs:
             type=raw,value=latest
             type=sha,format=short
 
-      # Optional SBOM
-      - name: SBOM (Syft)
-        if: ${{ env.ENABLE_SBOM == 'true' || secrets.ENABLE_SBOM == 'true' }}
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-
-      - name: Build & push image
+      - name: Build image (local, for scanning)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
 
-      # Optional vuln scan (fail on HIGH/CRITICAL)
-      - name: Trivy scan
-        if: ${{ env.ENABLE_TRIVY == 'true' || secrets.ENABLE_TRIVY == 'true' }}
+      # ---------- Container image vulnerability scan (Trivy) ----------
+      - name: Trivy image scan (fail on HIGH/CRITICAL)
+        if: ${{ env.ENABLE_TRIVY == 'true' || vars.ENABLE_TRIVY == 'true' }}
         uses: aquasecurity/trivy-action@0.24.0
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
@@ -133,52 +159,6 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build_push
-    steps:
-      - uses: actions/checkout@v4
+      - name: Show resulting image(s)
+        run: docker images | head -n 20
 
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Trust host key
-        run: ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Blue/green replace on target (no health check)
-        env:
-          IMAGE_NAME: ghcr.io/i4m-agh0ri/invoice_portal
-          SHA: ${{ github.sha }}
-        run: |
-          SHORT=${SHA::7}
-          ssh -o StrictHostKeyChecking=yes ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} <<'EOF'
-            set -euo pipefail
-            IMAGE_NAME="'"$IMAGE_NAME"'"
-            TAG_SHORT="'"$SHORT"'"
-
-            # Pull the new image (using short SHA tag, fallback to latest if needed)
-            docker pull "$IMAGE_NAME:$TAG_SHORT" || docker pull "$IMAGE_NAME:latest"
-
-            NEW="invoice-portal-$TAG_SHORT"
-            OLD=$(docker ps --filter "name=^invoice-portal-" --format '{{.Names}}' | head -n 1 || true)
-
-            # Run the new container (adjust published ports/env/volumes as needed)
-            docker run -d \
-              --name "$NEW" \
-              --restart always \
-              -p 80:8080 \
-              "$IMAGE_NAME:$TAG_SHORT"
-
-            # No health gate; proceed immediately
-
-            # Stop/remove old if present
-            if [ -n "$OLD" ]; then docker rm -f "$OLD" || true; fi
-
-            # Maintain a stable container name
-            if docker ps -a --format '{{.Names}}' | grep -q '^invoice-portal$'; then
-              docker rm -f invoice-portal || true
-            fi
-            docker rename "$NEW" invoice-portal
-          EOF
