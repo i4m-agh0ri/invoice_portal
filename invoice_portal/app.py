@@ -23,6 +23,7 @@ def _load_impl():
     # Try module imports first
     for mod_name in (
         "invoice_portal.invoice_portal.invoice_portal.app",  # canonical deepest module
+        "invoice_portal.invoice_portal.app",  # double-nested wrapper (will import deepest)
     ):
         try:
             return import_module(mod_name)
@@ -36,6 +37,8 @@ def _load_impl():
     candidates = [
         # canonical deepest implementation
         repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",
+        # double-nested file path
+        repo_root / "invoice_portal" / "invoice_portal" / "app.py",
         # optional src layout
         repo_root / "src" / "invoice_portal" / "app.py",
     ]
