@@ -1,0 +1,58 @@
+# Ignore everything by default, then opt-in what we need
+/*
+
+# Keep these top-level files/dirs
+!.gitignore
+!.dockerignore
+!Dockerfile
+!docker-compose.yml
+!Makefile
+!README.md
+!deploy/
+!invoice_portal/
+!tests/
+
+# Include contents of allowed folders
+!deploy/**
+!invoice_portal/**
+!tests/**
+
+# Ignore virtualenv and caches within invoice_portal
+invoice_portal/bin/
+invoice_portal/include/
+invoice_portal/lib/
+invoice_portal/lib64/
+invoice_portal/pyvenv.cfg
+invoice_portal/__pycache__/
+invoice_portal/**/*.pyc
+invoice_portal/app.db
+
+# Test caches and artifacts
+tests/__pycache__/
+tests/.pytest_cache/
+tests/**/*.results
+
+# Secrets/keys (do not commit!)
+id_ed25519*
+private.key
+public.key
+.env
+.env.*
+
+# Large or local-only content at repo root
+/notebooks/
+/data/
+/sq/
+/installer
+/invoicemaker-production.tar.gz
+/pass-backup-complete.tar.gz
+*.tar.gz
+*.tgz
+*.zip
+*.log
+
+# OS/editor files
+.DS_Store
+.vscode/
+.idea/
+
