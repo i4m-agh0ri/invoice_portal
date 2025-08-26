@@ -24,24 +24,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- Example Python toolchain; safe to keep even if not Python ---
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install Python deps (if present)
+      # Make package importable whether layout is ./invoice_portal or ./src/invoice_portal
+      - name: Configure PYTHONPATH
+        run: |
+          echo "PYTHONPATH=$GITHUB_WORKSPACE:$GITHUB_WORKSPACE/src" >> $GITHUB_ENV
+
+      - name: Install deps & package (editable if defined)
         run: |
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f pyproject.toml ] || [ -f setup.py ]; then pip install -e .; fi
           pip install -q pytest || true
 
       - name: Run unit/integration tests
-        run: |
-          if command -v pytest >/dev/null 2>&1 && [ -d tests ]; then
-            pytest -q
-          else
-            echo "No pytest or tests/ directory found — skipping tests"
-          fi
+        run: pytest -q
 
   perf:
     runs-on: ubuntu-latest
@@ -125,7 +125,7 @@ jobs:
         if: ${{ env.ENABLE_BANDIT == 'true' || vars.ENABLE_BANDIT == 'true' }}
         run: |
           pip install -q bandit || true
-          if [ -d src ] || [ -d app ] || [ -f setup.py ] || [ -f pyproject.toml ]; then
+          if [ -d src ] || [ -d app ] || [ -f setup.py ] || [ -f pyproject.toml ] || [ -d invoice_portal ]; then
             bandit -r . -x tests || true
           else
             echo "No Python source detected — skipping Bandit"
@@ -161,4 +161,5 @@ jobs:
 
       - name: Show resulting image(s)
         run: docker images | head -n 20
+
 
