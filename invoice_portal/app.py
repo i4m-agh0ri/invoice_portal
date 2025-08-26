@@ -22,8 +22,7 @@ def _import_from_file(path: Path):
 def _load_impl():
     # Try module imports first
     for mod_name in (
-        "invoice_portal.invoice_portal.app",  # deeper nested
-        "invoice_portal.app",  # sibling package (src-style projects)
+        "invoice_portal.invoice_portal.invoice_portal.app",  # canonical deepest module
         "app",  # root-level fallback
     ):
         try:
@@ -36,15 +35,14 @@ def _load_impl():
     pkg_root = here.parent  # invoice_portal/
     repo_root = pkg_root.parent
     candidates = [
-        pkg_root / "app.py",  # invoice_portal/app.py (this file) — ignore
-        repo_root / "invoice_portal" / "app.py",  # invoice_portal/invoice_portal/app.py (sibling wrapper)
-        repo_root / "invoice_portal" / "invoice_portal" / "app.py",  # triple-nested impl
+        # canonical deepest implementation
+        repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",
+        # other fallbacks
         repo_root / "app.py",  # root-level app.py
         repo_root / "src" / "invoice_portal" / "app.py",  # src layout
-        repo_root / "invoice_portal" / "src" / "invoice_portal" / "app.py",  # nested src
     ]
     for path in candidates:
-        if path.is_file() and path != here:
+        if path.is_file():
             try:
                 return _import_from_file(path)
             except Exception:
