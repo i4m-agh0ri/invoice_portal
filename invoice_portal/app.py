@@ -23,7 +23,6 @@ def _load_impl():
     # Try module imports first
     for mod_name in (
         "invoice_portal.invoice_portal.invoice_portal.app",  # canonical deepest module
-        "app",  # root-level fallback
     ):
         try:
             return import_module(mod_name)
@@ -37,9 +36,8 @@ def _load_impl():
     candidates = [
         # canonical deepest implementation
         repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",
-        # other fallbacks
-        repo_root / "app.py",  # root-level app.py
-        repo_root / "src" / "invoice_portal" / "app.py",  # src layout
+        # optional src layout
+        repo_root / "src" / "invoice_portal" / "app.py",
     ]
     for path in candidates:
         if path.is_file():
@@ -76,8 +74,4 @@ def create_app(*args, **kwargs):
     return app
 
 
-# Optional WSGI app for runners expecting invoice_portal.app:app
-try:
-    app = create_app()
-except Exception:  # pragma: no cover
-    app = None
+# Do not instantiate app at import time to avoid recursion in mixed layouts

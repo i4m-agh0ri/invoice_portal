@@ -23,7 +23,6 @@ def _load_impl():
     # Try module imports first (canonical deepest module, then root fallback)
     for mod_name in (
         "invoice_portal.invoice_portal.invoice_portal.app",
-        "app",
     ):
         try:
             return import_module(mod_name)
@@ -36,7 +35,7 @@ def _load_impl():
     repo_root = pkg_root.parent
     candidates = [
         repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",  # canonical impl
-        repo_root / "app.py",  # root-level app.py
+        repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",  # canonical impl
         repo_root / "src" / "invoice_portal" / "app.py",  # src layout
     ]
     for path in candidates:
@@ -74,9 +73,4 @@ def create_app(*args, **kwargs):
     return app
 
 
-# Optional WSGI app for runners expecting invoice_portal.app:app
-try:
-    app = create_app()
-except Exception:  # pragma: no cover
-    app = None
-
+# Do not instantiate app at import time to avoid recursion in mixed layouts
