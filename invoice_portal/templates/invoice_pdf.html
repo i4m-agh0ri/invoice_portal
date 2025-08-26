@@ -26,8 +26,6 @@
     .totals tr:last-child td { font-weight: 700; border-top: 1px solid var(--border); padding-top: 10px; }
     .actions { margin-top: 16px; }
     .btn { display: inline-block; padding: 8px 10px; border: 1px solid #d1d5db; background: #f9fafb; color: #111827; border-radius: 6px; text-decoration: none; font-size: 14px; }
-    .notes-box { margin-top: 18px; border: 1px solid var(--border); padding: 10px; min-height: 120px; }
-    .notes-title { font-weight: 600; color: var(--muted); margin: 0 0 6px 0; font-size: 14px; }
     @media print {
       .actions { display: none; }
       body { margin: 0.5in; }
@@ -78,16 +76,6 @@
     <tr><td>Tax ({{ '%.0f'|format(invoice['tax_rate']*100) }}%)</td><td class="right">{{ invoice['currency'] }} {{ '%.2f'|format(totals.tax) }}</td></tr>
     <tr><td>Total</td><td class="right">{{ invoice['currency'] }} {{ '%.2f'|format(totals.total) }}</td></tr>
   </table>
-  <div class="notes-box">
-    <div class="notes-title">Additional Notes / Company Stamps</div>
-    {% if invoice['notes'] %}
-      <div style="margin-bottom:8px; white-space:pre-wrap;">{{ invoice['notes'] }}</div>
-      <hr style="border:none; border-top:1px dashed var(--border); margin:8px 0;" />
-    {% endif %}
-    <div style="height:80px; opacity:.7; color: var(--muted);">
-      Use this area for approvals, stamps, or extra details when printing.
-    </div>
-  </div>
   <div class="actions">
     <a class="btn" href="#" onclick="window.print();return false;">Print / Save as PDF</a>
   </div>

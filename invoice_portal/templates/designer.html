@@ -12,7 +12,6 @@
       <button class="btn" id="btn-save-local">Save to LocalStorage</button>
       <button class="btn" id="btn-download-yaml">Download YAML</button>
       <button class="btn" id="btn-load-sample">Load Sample</button>
-      <button class="btn" id="btn-preview-pdf" title="Open PDF for first invoice without auto-print">Preview PDF (first invoice)</button>
       <input type="file" id="file-input" accept=".yaml,.yml" style="margin-left:.5rem" />
     </div>
     <div id="issues" class="flash" style="display:none; margin-top:.5rem"></div>
@@ -38,7 +37,7 @@ invoices:
     due_date: 2025-02-10
     status: open   # open|paid|overdue
     tax_rate: 0.07
-    notes: Thank you!  # Appears in PDF's "Additional Notes / Company Stamps" box
+    notes: Thank you!
 items:
   - invoice_id: 1
     description: Design
@@ -203,37 +202,6 @@ payments:
           }
         };
         reader.readAsText(f);
-      });
-
-      // Preview PDF (first invoice) without auto-print
-      text('btn-preview-pdf').addEventListener('click', function(){
-        try {
-          const y = text('yaml-input').value || '';
-          const obj = jsyaml.load(y) || {};
-          const invs = Array.isArray(obj.invoices) ? obj.invoices : [];
-          if (!invs.length || invs[0].id == null) { alert('No invoice with an id found to preview'); return; }
-          // Post directly with this YAML and auto_print=0 to avoid triggering print dialog
-          const id = invs[0].id;
-          const f = document.createElement('form');
-          f.method = 'POST';
-          f.action = '/invoice/' + id + '/pdf';
-          f.target = '_blank';
-          const inp = document.createElement('input');
-          inp.type = 'hidden';
-          inp.name = 'client_data';
-          inp.value = y;
-          f.appendChild(inp);
-          const auto = document.createElement('input');
-          auto.type = 'hidden';
-          auto.name = 'auto_print';
-          auto.value = '0';
-          f.appendChild(auto);
-          document.body.appendChild(f);
-          f.submit();
-          document.body.removeChild(f);
-        } catch (e) {
-          alert('YAML parse error: ' + e.message);
-        }
       });
     });
   </script>

@@ -9,9 +9,10 @@
     <td>{{ inv['currency'] }} {{ '%.2f'|format(totals.paid) }}</td>
     <td>{{ inv['currency'] }} {{ '%.2f'|format(totals.due) }}</td>
     <td>
-      <button class="btn" onclick="openPdf({{ inv['id'] }})">View</button>
       {% if totals.due > 0 and inv['status'] in ['open','overdue'] %}
       <button class="btn" data-pay="{{ inv['id'] }}">Pay</button>
+      {% else %}
+      <button class="btn" onclick="openPdf({{ inv['id'] }})">View</button>
       {% endif %}
     </td>
   </tr>

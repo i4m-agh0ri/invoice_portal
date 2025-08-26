@@ -38,9 +38,7 @@ def create_app() -> Flask:
     def shell():
         return render_template("client_shell.html")
 
-    @app.get("/help")
-    def help_page():
-        return render_template("help.html")
+    # Help page removed per request
 
     @app.get("/designer")
     def designer():
