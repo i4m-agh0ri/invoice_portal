@@ -20,10 +20,10 @@ def _import_from_file(path: Path):
 
 
 def _load_impl():
-    # Try module imports first (canonical deepest module, then root fallback)
+    # Try module imports first (prefer double-nested canonical path)
     for mod_name in (
-        "invoice_portal.invoice_portal.invoice_portal.app",
         "invoice_portal.invoice_portal.app",
+        "invoice_portal.invoice_portal.invoice_portal.app",
     ):
         try:
             return import_module(mod_name)
@@ -35,8 +35,8 @@ def _load_impl():
     pkg_root = here.parent  # invoice_portal/
     repo_root = pkg_root.parent
     candidates = [
-        repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",  # deepest impl
-        repo_root / "invoice_portal" / "invoice_portal" / "app.py",  # double-nested
+        repo_root / "invoice_portal" / "invoice_portal" / "app.py",  # double-nested canonical
+        repo_root / "invoice_portal" / "invoice_portal" / "invoice_portal" / "app.py",  # deepest fallback
         repo_root / "src" / "invoice_portal" / "app.py",  # src layout
         repo_root / "app.py",  # root fallback
     ]
