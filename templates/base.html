@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Invoice Portal{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+  <meta name="htmx-config" content='{"withCredentials":true}'>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Invoice Portal</div>
+    <nav>
+      <a href="#" id="nav-invoices">Invoices</a>
+      <span class="sep">|</span>
+      <a href="#" id="nav-data">Your Data</a>
+      <span class="sep">|</span>
+      <a href="/designer">Designer</a>
+      <span class="sep">|</span>
+      <a href="/help">Help</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <div id="modal" class="modal"></div>
+  <script>
+    // Client data vault in localStorage (YAML only)
+    const LS_KEY = 'invoice_portal_data';
+    function defaultData(){ return { client:{}, invoices:[], items:[], payments:[] }; }
+    window.getClientDataYAML = function(){
+      return localStorage.getItem(LS_KEY) || '';
+    }
+    window.setClientDataYAML = function(yamlTxt){
+      localStorage.setItem(LS_KEY, yamlTxt || '');
+    }
+    window.getClientData = function(){
+      const y = getClientDataYAML();
+      if (!y) return defaultData();
+      try { return jsyaml.load(y) || defaultData(); } catch { return defaultData(); }
+    }
+    window.setClientData = function(obj){
+      try { setClientDataYAML(jsyaml.dump(obj, {lineWidth: 100})); }
+      catch { /* ignore */ }
+    }
+
+    // Attach client data (YAML) to every HTMX request
+    document.body.addEventListener('htmx:configRequest', function(evt){
+      evt.detail.parameters['client_data'] = getClientDataYAML();
+    });
+
+    document.addEventListener('click', function(e){
+      if (e.target.classList.contains('modal') || e.target.classList.contains('modal-close')) {
+        e.target.closest('.modal').classList.remove('open');
+        e.target.closest('.modal').innerHTML='';
+      }
+    })
+
+    // Open modal after content swap
+    document.body.addEventListener('htmx:afterSwap', function(evt){
+      if (evt.detail && evt.detail.target && evt.detail.target.id === 'modal') {
+        document.getElementById('modal').classList.add('open');
+      }
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e){
+      if (e.key === 'Escape') {
+        const m = document.getElementById('modal');
+        if (m) { m.classList.remove('open'); m.innerHTML=''; }
+      }
+    });
+
+    // Nav wiring (used in client_shell)
+    document.addEventListener('click', function(e){
+      if (e.target.id === 'nav-invoices') {
+        e.preventDefault();
+        const main = document.querySelector('#shell-main');
+        if (main) { htmx.ajax('POST', '/invoices', {target: '#shell-main'}); }
+        else { window.location.href = '/'; }
+      }
+      if (e.target.id === 'nav-data') {
+        e.preventDefault();
+        const sec = document.querySelector('#data-panel');
+        if (sec) sec.scrollIntoView({behavior:'smooth'});
+        else window.location.href = '/';
+      }
+    });
+
+    // Open invoice "PDF" view in a new tab via POST (carries YAML data)
+    window.openPdf = function(invoiceId){
+      const f = document.createElement('form');
+      f.method = 'POST';
+      f.action = '/invoice/' + invoiceId + '/pdf';
+      f.target = '_blank';
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'client_data';
+      inp.value = getClientDataYAML();
+      f.appendChild(inp);
+      const auto = document.createElement('input');
+      auto.type = 'hidden';
+      auto.name = 'auto_print';
+      auto.value = '1';
+      f.appendChild(auto);
+      document.body.appendChild(f);
+      f.submit();
+      document.body.removeChild(f);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %}Data Designer • Invoice Portal{% endblock %}
+{% block content %}
+  <h1>Data Designer</h1>
+  <p class="muted">Author your invoice data in YAML, validate it, and save it to your browser.</p>
+
+  <div class="card">
+    <h2>YAML</h2>
+    <textarea id="yaml-input" style="width:100%; height:420px"></textarea>
+    <div class="row" style="margin-top:.5rem">
+      <button class="btn" id="btn-validate">Validate</button>
+      <button class="btn" id="btn-save-local">Save to LocalStorage</button>
+      <button class="btn" id="btn-download-yaml">Download YAML</button>
+      <button class="btn" id="btn-load-sample">Load Sample</button>
+      <input type="file" id="file-input" accept=".yaml,.yml" style="margin-left:.5rem" />
+    </div>
+    <div id="issues" class="flash" style="display:none; margin-top:.5rem"></div>
+  </div>
+
+  <div class="card">
+    <h2>Schema Overview</h2>
+    <pre><code>client:
+  name: Your Company
+  email: you@example.com
+  address_line1: 123 Street
+  address_line2: Suite 100
+  city: City
+  state: ST
+  postal_code: 12345
+  country: US
+  tax_id: US-123456789
+invoices:
+  - id: 1
+    number: INV-1001
+    currency: USD
+    issue_date: 2025-01-10
+    due_date: 2025-02-10
+    status: open   # open|paid|overdue
+    tax_rate: 0.07
+    notes: Thank you!
+items:
+  - invoice_id: 1
+    description: Design
+    quantity: 10
+    unit_price: 80
+payments:
+  - invoice_id: 1
+    amount: 856.0
+    currency: USD
+    method: local
+    reference: paid-1
+    </code></pre>
+  </div>
+
+  <script>
+    const sampleYAML = `client:
+  name: Acme Corp
+  email: acme@example.com
+  address_line1: 123 Market St
+  address_line2: 
+  city: San Francisco
+  state: CA
+  postal_code: 94105
+  country: US
+  tax_id: US-123456789
+invoices:
+  - id: 1
+    number: INV-1001
+    currency: USD
+    issue_date: 2025-01-10
+    due_date: 2025-02-10
+    status: open
+    tax_rate: 0.07
+    notes: Thank you for your business!
+  - id: 2
+    number: INV-1000
+    currency: USD
+    issue_date: 2024-12-01
+    due_date: 2024-12-31
+    status: paid
+    tax_rate: 0.07
+    notes: Paid in full
+items:
+  - invoice_id: 1
+    description: Design
+    quantity: 10
+    unit_price: 80
+  - invoice_id: 1
+    description: Development
+    quantity: 20
+    unit_price: 120
+  - invoice_id: 2
+    description: Retainer
+    quantity: 1
+    unit_price: 5000
+payments:
+  - invoice_id: 2
+    amount: 5350
+    currency: USD
+    method: local
+    reference: demo
+`;
+
+    function text(id){ return document.getElementById(id); }
+    function showIssues(list){
+      const el = text('issues');
+      if (!list || list.length === 0) { el.style.display='none'; el.innerHTML=''; return; }
+      el.style.display = 'block';
+      el.className = 'flash' + (list.some(i=>i.level==='error') ? ' warning' : ' info');
+      el.innerHTML = list.map(i => (i.level?('['+i.level.toUpperCase()+'] '):'') + i.msg).join('<br>');
+    }
+
+    function validateData(data){
+      const issues = [];
+      if (typeof data !== 'object' || data === null) { issues.push({level:'error', msg:'Root must be an object'}); return issues; }
+      const {client, invoices, items, payments} = data;
+      if (!client || typeof client !== 'object') issues.push({level:'error', msg:'client: required object'});
+      if (!Array.isArray(invoices)) issues.push({level:'error', msg:'invoices: required array'});
+      if (!Array.isArray(items)) issues.push({level:'error', msg:'items: required array'});
+      if (!Array.isArray(payments)) issues.push({level:'info', msg:'payments: optional array (default empty)'});
+      if (client) {
+        if (!client.name) issues.push({level:'warning', msg:'client.name is recommended'});
+      }
+      const invIds = new Set();
+      if (Array.isArray(invoices)) {
+        invoices.forEach((inv, idx) => {
+          if (inv.id == null) issues.push({level:'error', msg:`invoices[${idx}].id is required`});
+          else if (invIds.has(inv.id)) issues.push({level:'error', msg:`duplicate invoice id ${inv.id}`});
+          else invIds.add(inv.id);
+          if (!inv.number) issues.push({level:'error', msg:`invoices[${idx}].number is required`});
+          if (!inv.currency) issues.push({level:'warning', msg:`invoices[${idx}].currency missing (default USD)`});
+          if (!inv.issue_date) issues.push({level:'warning', msg:`invoices[${idx}].issue_date missing`});
+          if (!inv.due_date) issues.push({level:'warning', msg:`invoices[${idx}].due_date missing`});
+          if (!['open','paid','overdue'].includes(inv.status)) issues.push({level:'warning', msg:`invoices[${idx}].status should be open|paid|overdue`});
+          if (typeof inv.tax_rate !== 'number') issues.push({level:'warning', msg:`invoices[${idx}].tax_rate should be number (e.g., 0.07)`});
+        });
+      }
+      if (Array.isArray(items)) {
+        items.forEach((it, idx) => {
+          if (it.invoice_id == null) issues.push({level:'error', msg:`items[${idx}].invoice_id is required`});
+          else if (!invIds.has(it.invoice_id)) issues.push({level:'warning', msg:`items[${idx}].invoice_id ${it.invoice_id} not found in invoices`});
+          if (!it.description) issues.push({level:'warning', msg:`items[${idx}].description is recommended`});
+          if (typeof it.quantity !== 'number') issues.push({level:'warning', msg:`items[${idx}].quantity should be number`});
+          if (typeof it.unit_price !== 'number') issues.push({level:'warning', msg:`items[${idx}].unit_price should be number`});
+        });
+      }
+      if (Array.isArray(payments)) {
+        payments.forEach((p, idx) => {
+          if (p.invoice_id == null) issues.push({level:'error', msg:`payments[${idx}].invoice_id is required`});
+          else if (!invIds.has(p.invoice_id)) issues.push({level:'warning', msg:`payments[${idx}].invoice_id ${p.invoice_id} not found in invoices`});
+          if (typeof p.amount !== 'number') issues.push({level:'warning', msg:`payments[${idx}].amount should be number`});
+        });
+      }
+      return issues;
+    }
+
+    document.addEventListener('DOMContentLoaded', function(){
+      // Seed text area with existing YAML if present
+      text('yaml-input').value = getClientDataYAML() || '';
+      text('btn-load-sample').addEventListener('click', function(){ text('yaml-input').value = sampleYAML; });
+      text('btn-validate').addEventListener('click', function(){
+        try {
+          const obj = jsyaml.load(text('yaml-input').value || '{}') || {};
+          const issues = validateData(obj);
+          showIssues(issues);
+        } catch (e) {
+          showIssues([{level:'error', msg:'YAML parse error: ' + e.message}]);
+        }
+      });
+      text('btn-save-local').addEventListener('click', function(){
+        const y = text('yaml-input').value || '';
+        try {
+          const obj = jsyaml.load(y) || {};
+          const issues = validateData(obj).filter(i=>i.level==='error');
+          if (issues.length) { showIssues(issues); alert('Fix errors before saving'); return; }
+          setClientDataYAML(y);
+          alert('Saved to LocalStorage');
+        } catch (e) {
+          showIssues([{level:'error', msg:'YAML parse error: ' + e.message}]);
+        }
+      });
+      text('btn-download-yaml').addEventListener('click', function(){
+        const y = text('yaml-input').value || '';
+        const blob = new Blob([y], {type:'text/yaml'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'invoices.yaml';
+        a.click();
+      });
+      text('file-input').addEventListener('change', function(ev){
+        const f = ev.target.files[0];
+        if (!f) return;
+        const reader = new FileReader();
+        reader.onload = function(){
+          try {
+            // Validate YAML upon load
+            const obj = jsyaml.load(reader.result) || {};
+            text('yaml-input').value = jsyaml.dump(obj, {lineWidth: 100});
+            showIssues([]);
+          } catch (e) {
+            showIssues([{level:'error', msg:'YAML parse error: ' + e.message}]);
+          }
+        };
+        reader.readAsText(f);
+      });
+    });
+  </script>
+{% endblock %}

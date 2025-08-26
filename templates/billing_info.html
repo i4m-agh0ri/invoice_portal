@@ -1,0 +1,23 @@
+<form id="billing-form" class="grid">
+  <label>Name<input name="name" value="{{ client['name'] or '' }}" required></label>
+  <label>Address Line 1<input name="address_line1" value="{{ client['address_line1'] or '' }}"></label>
+  <label>Address Line 2<input name="address_line2" value="{{ client['address_line2'] or '' }}"></label>
+  <label>City<input name="city" value="{{ client['city'] or '' }}"></label>
+  <label>State / Region<input name="state" value="{{ client['state'] or '' }}"></label>
+  <label>Postal Code<input name="postal_code" value="{{ client['postal_code'] or '' }}"></label>
+  <label>Country<input name="country" value="{{ client['country'] or '' }}"></label>
+  <label>Tax ID<input name="tax_id" value="{{ client['tax_id'] or '' }}"></label>
+  <div class="row">
+    <button class="btn" type="submit">Save</button>
+  </div>
+</form>
+<script>
+  document.getElementById('billing-form').addEventListener('submit', function(e){
+    e.preventDefault();
+    const data = getClientData();
+    const fd = new FormData(e.target);
+    data.client = Object.fromEntries(fd.entries());
+    setClientData(data);
+    alert('Saved billing info locally');
+  });
+</script>
